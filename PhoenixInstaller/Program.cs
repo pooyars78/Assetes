@@ -25,22 +25,33 @@ internal static class Program
 
     private static InstallerOptions DetectOptions()
     {
-        var phoenixFolder = @"C:\Phoenix";
-        var updates = Directory.Exists(phoenixFolder)
-            ? Directory.EnumerateFiles(phoenixFolder, "Phoenix*_B*.ex5", SearchOption.TopDirectoryOnly)
-                .Where(path => Regex.IsMatch(Path.GetFileName(path), @"^Phoenix.*_B\d+\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
-                .ToArray()
-            : Array.Empty<string>();
+        var running = Process.GetProcessesByName("terminal64")
+            .Select(p => new { Process = p, Path = TryGetExecutablePath(p) })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Path) && File.Exists(x.Path))
+            .ToArray();
+        if (running.Length != 1)
+            throw new InvalidOperationException("Start only the MetaTrader terminal where Phoenix should be installed, then run the installer again.");
+
+        var self = Environment.ProcessPath ?? throw new InvalidOperationException("Could not determine installer location.");
+        var folder = Path.GetDirectoryName(Path.GetFullPath(self))!;
+        var updates = Directory.EnumerateFiles(folder, "*.ex5", SearchOption.TopDirectoryOnly)
+            .Where(path => Path.GetFileName(path).StartsWith("Phoenix", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !Regex.IsMatch(Path.GetFileName(path), @"_B\d+\.ex5$", RegexOptions.IgnoreCase))
+            .ToArray();
 
         if (updates.Length == 0)
-            throw new FileNotFoundException("No Phoenix update .ex5 file was found in C:\\Phoenix. Keep the downloaded Phoenix*_B####.ex5 file in C:\\Phoenix and run the installer again.");
+            throw new FileNotFoundException("The Phoenix .ex5 file was not found beside PhoenixInstaller.exe. Keep both downloaded files in the same folder and run the installer again.");
         if (updates.Length > 1)
-            throw new InvalidOperationException("More than one Phoenix update file was found in C:\\Phoenix. Keep only the one update you want to install, then run the installer again.");
+            throw new InvalidOperationException("More than one Phoenix .ex5 file was found beside PhoenixInstaller.exe. Keep only the intended EA file beside the installer.");
 
         var source = updates[0];
+        var targetName = Path.GetFileName(source);
+        var terminalExe = Path.GetFullPath(running[0].Path!);
+        var dataPath = FindTerminalDataFolder(Path.GetDirectoryName(terminalExe)!);
+        return new InstallerOptions(dataPath, terminalExe, source, targetName, null);
+
+        /* Update-build filename parsing is used only by the previous update flow. */
         var match = Regex.Match(Path.GetFileName(source), @"^(?<target>.+)_B\d+\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        if (!match.Success || !match.Groups["target"].Value.StartsWith("Phoenix", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("The update filename is not in the expected Phoenix build format.");
 
         var terminals = Process.GetProcessesByName("terminal64")
             .Select(p => new { Process = p, Path = TryGetExecutablePath(p) })
@@ -58,7 +69,7 @@ internal static class Program
         var terminalDirectory = Path.GetDirectoryName(terminalExe)!;
         var dataPath = FindTerminalDataFolder(terminalDirectory);
 
-        return new InstallerOptions(dataPath, terminalExe, Path.GetFileName(source), match.Groups["target"].Value + ".ex5", null);
+        return new InstallerOptions(dataPath, terminalExe, source, targetName, null);
     }
 
     private static string FindTerminalDataFolder(string terminalDirectory)
@@ -156,7 +167,7 @@ internal static class Program
 
     private static int Install(InstallerOptions options)
     {
-        var source = Path.Combine(@"C:\Phoenix", options.SourceFile);
+        var source = Path.IsPathRooted(options.SourceFile) ? options.SourceFile : Path.Combine(@"C:\Phoenix", options.SourceFile);
         var experts = Path.Combine(options.DataPath, "MQL5", "Experts");
         var destination = Path.Combine(experts, options.TargetFile);
 
