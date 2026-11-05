@@ -22,10 +22,10 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Publish standalone Windows executable
+      - name: Publish standalone Native AOT executable
         shell: pwsh
         run: |
-          dotnet publish PhoenixInstaller/PhoenixInstaller.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o PhoenixInstaller/publish
+          dotnet publish PhoenixInstaller/PhoenixInstaller.csproj -c Release -r win-x64 --self-contained true -p:PublishAot=true -p:PublishSingleFile=false -p:StripSymbols=true -p:IlcOptimizationPreference=Size -p:InvariantGlobalization=true -p:DebugType=None -p:DebugSymbols=false -o PhoenixInstaller/publish
           if (!(Test-Path "PhoenixInstaller/publish/PhoenixInstaller.exe")) {
             throw "PhoenixInstaller.exe was not produced."
           }
@@ -33,7 +33,16 @@ jobs:
           $size = (Get-Item "PhoenixInstaller.exe").Length
           Write-Host "PhoenixInstaller.exe size: $size bytes"
 
+      - name: Upload test build artifact
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhoenixInstaller-NativeAOT-test
+          path: PhoenixInstaller.exe
+          if-no-files-found: error
+
       - name: Publish installer as a GitHub Release asset
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.0
