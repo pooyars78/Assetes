@@ -42,21 +42,21 @@ internal static class Program
             {
                 var filesPath = Path.Combine(dataPath, "MQL5", "Files");
                 return Directory.Exists(filesPath)
-                    ? Directory.EnumerateFiles(filesPath, "Phoenix*_B*.datx5", SearchOption.TopDirectoryOnly)
+                    ? Directory.EnumerateFiles(filesPath, "Phoenix*_B*.ex5", SearchOption.TopDirectoryOnly)
                     : Enumerable.Empty<string>();
             })
-            .Where(path => Regex.IsMatch(Path.GetFileName(path), @"^Phoenix.*_B\d+\.datx5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            .Where(path => Regex.IsMatch(Path.GetFileName(path), @"^Phoenix.*_B\d+\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         if (updates.Length == 0)
-            throw new FileNotFoundException("No Phoenix update .datx5 file was found. Keep the downloaded Phoenix*_B####.datx5 file in the MetaTrader MQL5\\Files folder.");
+            throw new FileNotFoundException("No Phoenix update .ex5 file was found. Keep the downloaded Phoenix*_B####.ex5 file in the MetaTrader MQL5\\Files folder.");
         if (updates.Length > 1)
             throw new InvalidOperationException("More than one Phoenix update file was found in MetaTrader data folders. Keep only the one update you want to install, then run the installer again.");
 
         var source = updates[0];
         var dataPath = Directory.GetParent(Directory.GetParent(Path.GetDirectoryName(source)!)!.FullName)!.FullName;
-        var match = Regex.Match(Path.GetFileName(source), @"^(?<target>.+)_B\d+\.datx5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var match = Regex.Match(Path.GetFileName(source), @"^(?<target>.+)_B\d+\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         if (!match.Success || !match.Groups["target"].Value.StartsWith("Phoenix", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("The update filename is not in the expected Phoenix build format.");
 
@@ -113,7 +113,7 @@ internal static class Program
         return new InstallerOptions(
             Path.GetFullPath(Required("data")),
             Path.GetFullPath(Required("terminal")),
-            SafeFileName(Required("source"), ".datx5"),
+            SafeFileName(Required("source"), ".ex5"),
             SafeFileName(Required("target"), ".ex5"),
             values.GetValueOrDefault("sha256"));
     }
