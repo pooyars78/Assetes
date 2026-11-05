@@ -129,7 +129,9 @@ internal static class Program
 
     private static int Install(InstallerOptions options)
     {
-        var source = Path.Combine(options.DataPath, "MQL5", "Files", options.SourceFile);
+        var source = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            options.SourceFile);
         var experts = Path.Combine(options.DataPath, "MQL5", "Experts");
         var destination = Path.Combine(experts, options.TargetFile);
 
