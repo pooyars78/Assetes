@@ -25,17 +25,17 @@ internal static class Program
 
     private static InstallerOptions DetectOptions()
     {
-        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-        var updates = Directory.Exists(desktop)
-            ? Directory.EnumerateFiles(desktop, "Phoenix*_B*.ex5", SearchOption.TopDirectoryOnly)
+        var phoenixFolder = @"C:\Phoenix";
+        var updates = Directory.Exists(phoenixFolder)
+            ? Directory.EnumerateFiles(phoenixFolder, "Phoenix*_B*.ex5", SearchOption.TopDirectoryOnly)
                 .Where(path => Regex.IsMatch(Path.GetFileName(path), @"^Phoenix.*_B\d+\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
                 .ToArray()
             : Array.Empty<string>();
 
         if (updates.Length == 0)
-            throw new FileNotFoundException("No Phoenix update .ex5 file was found on the Desktop. Keep the downloaded Phoenix*_B####.ex5 file on the Desktop and run the installer again.");
+            throw new FileNotFoundException("No Phoenix update .ex5 file was found in C:\\Phoenix. Keep the downloaded Phoenix*_B####.ex5 file in C:\\Phoenix and run the installer again.");
         if (updates.Length > 1)
-            throw new InvalidOperationException("More than one Phoenix update file was found on the Desktop. Keep only the one update you want to install, then run the installer again.");
+            throw new InvalidOperationException("More than one Phoenix update file was found in C:\\Phoenix. Keep only the one update you want to install, then run the installer again.");
 
         var source = updates[0];
         var match = Regex.Match(Path.GetFileName(source), @"^(?<target>.+)_B\d+\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
