@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.Win32;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
@@ -12,7 +13,10 @@ internal static class Program
     {
         try
         {
+            if (args.Length == 1 && args[0].Equals("--background", StringComparison.OrdinalIgnoreCase))
+                return RunBackground();
             var options = args.Length == 0 ? DetectOptions() : ParseArguments(args);
+            if (args.Length == 0) RegisterPersistentUpdater();
             return Install(options);
         }
         catch (Exception ex)
@@ -50,6 +54,63 @@ internal static class Program
         var terminalExe = Path.GetFullPath(running[0].Path!);
         var dataPath = FindTerminalDataFolder(Path.GetDirectoryName(terminalExe)!);
         return new InstallerOptions(dataPath, terminalExe, candidates[0], Path.GetFileName(candidates[0]), null);
+    }
+
+    private static void RegisterPersistentUpdater()
+    {
+        var self = Environment.ProcessPath ?? throw new InvalidOperationException("Installer path is unavailable.");
+        var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Phoenix");
+        Directory.CreateDirectory(folder);
+        var persistentExe = Path.Combine(folder, "PhoenixInstaller.exe");
+        if (!string.Equals(Path.GetFullPath(self), Path.GetFullPath(persistentExe), StringComparison.OrdinalIgnoreCase))
+            File.Copy(self, persistentExe, true);
+        using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true)
+            ?? Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
+        key.SetValue("PhoenixUpdater", "\"" + persistentExe + "\" --background");
+        Process.Start(new ProcessStartInfo { FileName = persistentExe, Arguments = "--background",
+            WorkingDirectory = folder, UseShellExecute = true, CreateNoWindow = true });
+    }
+
+    private static int RunBackground()
+    {
+        using var mutex = new Mutex(true, "Local\\PhoenixUpdater", out var created);
+        if (!created) return 0;
+        while (true)
+        {
+            try
+            {
+                var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MetaQuotes", "Terminal");
+                if (Directory.Exists(root))
+                    foreach (var dataPath in Directory.EnumerateDirectories(root))
+                    {
+                        var files = Path.Combine(dataPath, "MQL5", "Files");
+                        var request = Path.Combine(files, "PhoenixUpdate.request");
+                        if (!File.Exists(request)) continue;
+                        var lines = File.ReadAllLines(request);
+                        if (lines.Length < 2) continue;
+                        var sourceName = SafeFileName(lines[0], ".ex5");
+                        var targetName = SafeFileName(lines[1], ".ex5");
+                        var source = Path.Combine(files, sourceName);
+                        var origin = Path.Combine(dataPath, "origin.txt");
+                        if (!File.Exists(source) || !File.Exists(origin)) continue;
+                        var terminal = Path.Combine(File.ReadAllText(origin).Trim(), "terminal64.exe");
+                        if (!File.Exists(terminal)) continue;
+                        File.Delete(request);
+                        Install(new InstallerOptions(dataPath, terminal, source, targetName, null));
+                    }
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    var log = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Phoenix", "updater.log");
+                    Directory.CreateDirectory(Path.GetDirectoryName(log)!);
+                    File.AppendAllText(log, DateTime.Now.ToString("s") + " " + ex + Environment.NewLine);
+                }
+                catch { }
+            }
+            Thread.Sleep(2000);
+        }
     }
 
     private static string FindTerminalDataFolder(string terminalDirectory)
