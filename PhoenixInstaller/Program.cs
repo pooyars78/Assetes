@@ -29,47 +29,27 @@ internal static class Program
             .Select(p => new { Process = p, Path = TryGetExecutablePath(p) })
             .Where(x => !string.IsNullOrWhiteSpace(x.Path) && File.Exists(x.Path))
             .ToArray();
+
         if (running.Length != 1)
-            throw new InvalidOperationException("Start only the MetaTrader terminal where Phoenix should be installed, then run the installer again.");
+            throw new InvalidOperationException(running.Length == 0
+                ? "Start the MetaTrader 5 terminal where Phoenix should be installed, then run the installer again."
+                : "More than one MetaTrader terminal is running. Close the extra terminals and run the installer again.");
 
         var self = Environment.ProcessPath ?? throw new InvalidOperationException("Could not determine installer location.");
         var folder = Path.GetDirectoryName(Path.GetFullPath(self))!;
-        var updates = Directory.EnumerateFiles(folder, "*.ex5", SearchOption.TopDirectoryOnly)
+        var candidates = Directory.EnumerateFiles(folder, "*.ex5", SearchOption.TopDirectoryOnly)
             .Where(path => Path.GetFileName(path).StartsWith("Phoenix", StringComparison.OrdinalIgnoreCase))
             .Where(path => !Regex.IsMatch(Path.GetFileName(path), @"_B\d+\.ex5$", RegexOptions.IgnoreCase))
             .ToArray();
 
-        if (updates.Length == 0)
-            throw new FileNotFoundException("The Phoenix .ex5 file was not found beside PhoenixInstaller.exe. Keep both downloaded files in the same folder and run the installer again.");
-        if (updates.Length > 1)
-            throw new InvalidOperationException("More than one Phoenix .ex5 file was found beside PhoenixInstaller.exe. Keep only the intended EA file beside the installer.");
+        if (candidates.Length != 1)
+            throw new FileNotFoundException(candidates.Length == 0
+                ? "The Phoenix .ex5 file was not found beside PhoenixInstaller.exe. Keep both downloaded files in the same folder and run the installer again."
+                : "More than one Phoenix .ex5 file was found beside PhoenixInstaller.exe. Keep only the intended Phoenix EA file beside the installer.");
 
-        var source = updates[0];
-        var targetName = Path.GetFileName(source);
         var terminalExe = Path.GetFullPath(running[0].Path!);
         var dataPath = FindTerminalDataFolder(Path.GetDirectoryName(terminalExe)!);
-        return new InstallerOptions(dataPath, terminalExe, source, targetName, null);
-
-        /* Update-build filename parsing is used only by the previous update flow. */
-        var match = Regex.Match(Path.GetFileName(source), @"^(?<target>.+)_B\d+\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-
-        var terminals = Process.GetProcessesByName("terminal64")
-            .Select(p => new { Process = p, Path = TryGetExecutablePath(p) })
-            .Where(x => !string.IsNullOrWhiteSpace(x.Path) && File.Exists(x.Path))
-            .ToArray();
-
-        if (terminals.Length == 0)
-            throw new InvalidOperationException("MetaTrader 5 is not running. Start the terminal that owns this update, then run the installer again.");
-
-        var terminalPaths = terminals.Select(x => Path.GetFullPath(x.Path!)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        if (terminalPaths.Length != 1 || terminals.Length != 1)
-            throw new InvalidOperationException("More than one MetaTrader terminal process is running. Close the extra terminals and run the installer again so the update is applied to the correct terminal.");
-
-        var terminalExe = terminalPaths[0];
-        var terminalDirectory = Path.GetDirectoryName(terminalExe)!;
-        var dataPath = FindTerminalDataFolder(terminalDirectory);
-
-        return new InstallerOptions(dataPath, terminalExe, source, targetName, null);
+        return new InstallerOptions(dataPath, terminalExe, candidates[0], Path.GetFileName(candidates[0]), null);
     }
 
     private static string FindTerminalDataFolder(string terminalDirectory)
