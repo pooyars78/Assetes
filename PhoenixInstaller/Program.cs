@@ -199,7 +199,9 @@ internal static class Program
             File.Move(staged, destination);
             if (new FileInfo(destination).Length != length)
                 throw new IOException("The installed EA size does not match the downloaded file.");
-            File.Delete(source);
+            if (string.Equals(Path.GetFullPath(Path.GetDirectoryName(source) ?? ""),
+                Path.GetFullPath(@"C:\Phoenix"), StringComparison.OrdinalIgnoreCase))
+                File.Delete(source);
 
             try
             {
