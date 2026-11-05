@@ -29,13 +29,16 @@ jobs:
           if (!(Test-Path "PhoenixInstaller/publish/PhoenixInstaller.exe")) {
             throw "PhoenixInstaller.exe was not produced."
           }
-
-      - name: Commit executable to repository
-        shell: pwsh
-        run: |
           Copy-Item "PhoenixInstaller/publish/PhoenixInstaller.exe" "PhoenixInstaller.exe" -Force
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "PhoenixInstaller.exe"
-          git commit -m "Build standalone PhoenixInstaller.exe" || Write-Host "No executable changes to commit."
-          git push
+          $size = (Get-Item "PhoenixInstaller.exe").Length
+          Write-Host "PhoenixInstaller.exe size: $size bytes"
+
+      - name: Publish installer as a GitHub Release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: Phoenix Installer v1.0.0
+          body: Phoenix MT5 standalone update installer.
+          files: PhoenixInstaller.exe
+          make_latest: true
+          fail_on_unmatched_files: true
