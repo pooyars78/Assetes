@@ -28,7 +28,7 @@ internal static class Program
         var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
         var updates = Directory.Exists(desktop)
             ? Directory.EnumerateFiles(desktop, "Phoenix*_B*.ex5", SearchOption.TopDirectoryOnly)
-                .Where(path => Regex.IsMatch(Path.GetFileName(path), @"^Phoenix.*_B\\d+\\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                .Where(path => Regex.IsMatch(Path.GetFileName(path), @"^Phoenix.*_B\d+\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
                 .ToArray()
             : Array.Empty<string>();
 
@@ -38,7 +38,7 @@ internal static class Program
             throw new InvalidOperationException("More than one Phoenix update file was found on the Desktop. Keep only the one update you want to install, then run the installer again.");
 
         var source = updates[0];
-        var match = Regex.Match(Path.GetFileName(source), @"^(?<target>.+)_B\\d+\\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var match = Regex.Match(Path.GetFileName(source), @"^(?<target>.+)_B\d+\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         if (!match.Success || !match.Groups["target"].Value.StartsWith("Phoenix", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("The update filename is not in the expected Phoenix build format.");
 
