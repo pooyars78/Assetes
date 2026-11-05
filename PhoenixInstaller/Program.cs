@@ -156,14 +156,12 @@ internal static class Program
 
     private static int Install(InstallerOptions options)
     {
-        var source = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-            options.SourceFile);
+        var source = Path.Combine(@"C:\Phoenix", options.SourceFile);
         var experts = Path.Combine(options.DataPath, "MQL5", "Experts");
         var destination = Path.Combine(experts, options.TargetFile);
 
         if (!File.Exists(source))
-            throw new FileNotFoundException("The downloaded update file was not found.", source);
+            throw new FileNotFoundException("The downloaded update file was not found in C:\\Phoenix.", source);
         if (new FileInfo(source).Length <= 0)
             throw new InvalidDataException("The downloaded update file is empty.");
         if (!File.Exists(options.TerminalExe))
