@@ -1,0 +1,41 @@
+name: Build Phoenix Installer
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "PhoenixInstaller/**"
+      - ".github/workflows/build-phoenix-installer.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish standalone Windows executable
+        shell: pwsh
+        run: |
+          dotnet publish PhoenixInstaller/PhoenixInstaller.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o PhoenixInstaller/publish
+          if (!(Test-Path "PhoenixInstaller/publish/PhoenixInstaller.exe")) {
+            throw "PhoenixInstaller.exe was not produced."
+          }
+
+      - name: Commit executable to repository
+        shell: pwsh
+        run: |
+          Copy-Item "PhoenixInstaller/publish/PhoenixInstaller.exe" "PhoenixInstaller.exe" -Force
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "PhoenixInstaller.exe"
+          git commit -m "Build standalone PhoenixInstaller.exe" || Write-Host "No executable changes to commit."
+          git push
