@@ -25,38 +25,20 @@ internal static class Program
 
     private static InstallerOptions DetectOptions()
     {
-        var candidateDataFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        AddDataFolderFromFilesDirectory(AppContext.BaseDirectory, candidateDataFolders);
-        AddDataFolderFromFilesDirectory(Environment.CurrentDirectory, candidateDataFolders);
-
-        var terminalDataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MetaQuotes", "Terminal");
-        if (Directory.Exists(terminalDataRoot))
-        {
-            foreach (var directory in Directory.EnumerateDirectories(terminalDataRoot))
-                if (Directory.Exists(Path.Combine(directory, "MQL5", "Files")))
-                    candidateDataFolders.Add(Path.GetFullPath(directory));
-        }
-
-        var updates = candidateDataFolders
-            .SelectMany(dataPath =>
-            {
-                var filesPath = Path.Combine(dataPath, "MQL5", "Files");
-                return Directory.Exists(filesPath)
-                    ? Directory.EnumerateFiles(filesPath, "Phoenix*_B*.ex5", SearchOption.TopDirectoryOnly)
-                    : Enumerable.Empty<string>();
-            })
-            .Where(path => Regex.IsMatch(Path.GetFileName(path), @"^Phoenix.*_B\d+\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        var updates = Directory.Exists(desktop)
+            ? Directory.EnumerateFiles(desktop, "Phoenix*_B*.ex5", SearchOption.TopDirectoryOnly)
+                .Where(path => Regex.IsMatch(Path.GetFileName(path), @"^Phoenix.*_B\\d+\\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                .ToArray()
+            : Array.Empty<string>();
 
         if (updates.Length == 0)
-            throw new FileNotFoundException("No Phoenix update .ex5 file was found. Keep the downloaded Phoenix*_B####.ex5 file in the MetaTrader MQL5\\Files folder.");
+            throw new FileNotFoundException("No Phoenix update .ex5 file was found on the Desktop. Keep the downloaded Phoenix*_B####.ex5 file on the Desktop and run the installer again.");
         if (updates.Length > 1)
-            throw new InvalidOperationException("More than one Phoenix update file was found in MetaTrader data folders. Keep only the one update you want to install, then run the installer again.");
+            throw new InvalidOperationException("More than one Phoenix update file was found on the Desktop. Keep only the one update you want to install, then run the installer again.");
 
         var source = updates[0];
-        var dataPath = Directory.GetParent(Directory.GetParent(Path.GetDirectoryName(source)!)!.FullName)!.FullName;
-        var match = Regex.Match(Path.GetFileName(source), @"^(?<target>.+)_B\d+\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var match = Regex.Match(Path.GetFileName(source), @"^(?<target>.+)_B\\d+\\.ex5$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         if (!match.Success || !match.Groups["target"].Value.StartsWith("Phoenix", StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("The update filename is not in the expected Phoenix build format.");
 
@@ -72,17 +54,62 @@ internal static class Program
         if (terminalPaths.Length != 1 || terminals.Length != 1)
             throw new InvalidOperationException("More than one MetaTrader terminal process is running. Close the extra terminals and run the installer again so the update is applied to the correct terminal.");
 
-        return new InstallerOptions(dataPath, terminalPaths[0], Path.GetFileName(source), match.Groups["target"].Value + ".ex5", null);
+        var terminalExe = terminalPaths[0];
+        var terminalDirectory = Path.GetDirectoryName(terminalExe)!;
+        var dataPath = FindTerminalDataFolder(terminalDirectory);
+
+        return new InstallerOptions(dataPath, terminalExe, Path.GetFileName(source), match.Groups["target"].Value + ".ex5", null);
     }
 
-    private static void AddDataFolderFromFilesDirectory(string directory, HashSet<string> results)
+    private static string FindTerminalDataFolder(string terminalDirectory)
     {
-        var full = Path.GetFullPath(directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        var info = new DirectoryInfo(full);
-        if (info.Name.Equals("Files", StringComparison.OrdinalIgnoreCase) &&
-            info.Parent?.Name.Equals("MQL5", StringComparison.OrdinalIgnoreCase) == true &&
-            info.Parent.Parent is not null)
-            results.Add(info.Parent.Parent.FullName);
+        var fullTerminalDirectory = Path.GetFullPath(terminalDirectory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        // MetaTrader portable mode stores its data beside terminal64.exe.
+        if (File.Exists(Path.Combine(fullTerminalDirectory, "portable.txt")) &&
+            Directory.Exists(Path.Combine(fullTerminalDirectory, "MQL5", "Experts")))
+            return fullTerminalDirectory;
+
+        var terminalDataRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "MetaQuotes", "Terminal");
+
+        if (Directory.Exists(terminalDataRoot))
+        {
+            var matches = new List<string>();
+            foreach (var directory in Directory.EnumerateDirectories(terminalDataRoot))
+            {
+                var originFile = Path.Combine(directory, "origin.txt");
+                if (!File.Exists(originFile))
+                    continue;
+
+                var origin = File.ReadAllText(originFile).Trim()
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (origin.Length == 0)
+                    continue;
+
+                try
+                {
+                    if (string.Equals(Path.GetFullPath(origin), fullTerminalDirectory, StringComparison.OrdinalIgnoreCase) &&
+                        Directory.Exists(Path.Combine(directory, "MQL5", "Experts")))
+                        matches.Add(Path.GetFullPath(directory));
+                }
+                catch
+                {
+                    // Ignore malformed origin.txt entries and continue scanning.
+                }
+            }
+
+            var uniqueMatches = matches.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            if (uniqueMatches.Length == 1)
+                return uniqueMatches[0];
+            if (uniqueMatches.Length > 1)
+                throw new InvalidOperationException("More than one MetaTrader data folder matches the running terminal. Open the correct terminal's data folder and contact Phoenix support.");
+        }
+
+        throw new DirectoryNotFoundException(
+            "Could not identify the data folder for the running MetaTrader 5 terminal. The installer matched the terminal executable but could not find its matching origin.txt data folder.");
     }
 
     private static string? TryGetExecutablePath(Process p)
