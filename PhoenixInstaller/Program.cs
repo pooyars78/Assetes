@@ -88,7 +88,7 @@ internal static class Program
                         if (!File.Exists(request)) continue;
                         var lines = File.ReadAllLines(request);
                         if (lines.Length < 2) continue;
-                        var sourceName = SafeFileName(lines[0], ".ex5");
+                        var sourceName = SafeFileName(lines[0], ".datx5");
                         var targetName = SafeFileName(lines[1], ".ex5");
                         var source = Path.Combine(files, sourceName);
                         var origin = Path.Combine(dataPath, "origin.txt");
