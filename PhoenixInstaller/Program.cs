@@ -260,8 +260,9 @@ internal static class Program
             File.Move(staged, destination);
             if (new FileInfo(destination).Length != length)
                 throw new IOException("The installed EA size does not match the downloaded file.");
-            if (string.Equals(Path.GetFullPath(Path.GetDirectoryName(source) ?? ""),
-                Path.GetFullPath(@"C:\Phoenix"), StringComparison.OrdinalIgnoreCase))
+            var sourceFolder = Path.GetFullPath(Path.GetDirectoryName(source) ?? "");
+            if (sourceFolder.Equals(Path.GetFullPath(@"C:\Phoenix"), StringComparison.OrdinalIgnoreCase) ||
+                sourceFolder.EndsWith(Path.Combine("MQL5", "Files"), StringComparison.OrdinalIgnoreCase))
                 File.Delete(source);
 
             try
